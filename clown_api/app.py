@@ -30,7 +30,16 @@ def get_clowns() -> Response:
         if not validate_sort_order(sort_order):
             return jsonify({"error": "Invalid sort_order parameter"}), 400
 
-        clowns = get_all_clowns(sort_order)
+        order = get_sort_order(sort_order)
+
+        if order == 'DESC':
+            """If descending, must call 0 scores first to maintain descending order"""
+            clowns = get_clowns_no_scores()
+            clowns += get_clowns_with_score(order)
+        else:
+            clowns = get_clowns_no_scores()
+            clowns += get_clowns_with_score(order)
+
         return clowns
     else:
         data = request.json
@@ -60,15 +69,13 @@ def get_clowns() -> Response:
 def get_all_clowns(sort_order: str) -> Response:
     """ Retrieves clowns: id, name, speciality, average rating.
         Orders if given, otherwise default is descending order. """
-    if not sort_order:
-        sort_order = 'desc'
     with conn.cursor() as cur:
         cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, AVG(r.rating) as Average_rating
                         FROM clown as c
                         JOIN speciality as s USING(speciality_id)
                         LEFT JOIN review as r USING(clown_id)
                         GROUP BY c.clown_id, c.clown_name, s.speciality_name
-                        ORDER BY AVG(r.rating) {sort_order.upper()};""")
+                        ORDER BY AVG(r.rating) {sort_order};""")
         clowns = cur.fetchall()
         return jsonify(clowns), 200
 
@@ -78,14 +85,64 @@ def get_clowns_with_id(clown_id: int) -> Response:
     """Returns a clown by its ID in response to a GET request;"""
     if request.method == "GET":
         with conn.cursor() as cur:
-            cur.execute(f"""SELECT clown_id, clown_name, speciality_name
-                        FROM clown
-                        JOIN speciality USING(speciality_id)
-                        WHERE clown_id = {clown_id};""")
-            clown = cur.fetchall()
+            clown = get_clown_with_score(clown_id)
+            clown += get_clown_no_scores(clown_id)
+
             if clown:
-                return jsonify(cur.fetchall()), 200
+                return jsonify(clown), 200
             return {'error': "No clown was found for this id"}, 404
+
+
+def get_clown_no_scores(clown_id: int) -> dict:
+    """Gets a clown by its id: their id, name, speciality"""
+    with conn.cursor() as cur:
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, speciality_name
+                        FROM clown AS c
+                        JOIN speciality USING(speciality_id)
+                        LEFT JOIN review AS r USING(clown_id)
+                        WHERE c.clown_id = {clown_id} AND {clown_id} NOT IN(SELECT clown_id FROM review);""")
+        clown = cur.fetchall()
+        return clown
+
+
+def get_clown_with_score(clown_id: int) -> dict:
+    """Gets a clown by its id: their id, name, speciality, average rating and number of ratings"""
+    with conn.cursor() as cur:
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, AVG(r.rating) as Average_rating, COUNT(r.rating)
+                        FROM clown as c
+                        JOIN speciality as s USING(speciality_id)
+                        LEFT JOIN review as r USING(clown_id)
+                        WHERE c.clown_id = {clown_id}
+                        GROUP BY c.clown_id, c.clown_name, s.speciality_name
+                        HAVING COUNT(r.rating) > 0;""")
+        clowns = cur.fetchall()
+        return clowns
+
+
+def get_clowns_no_scores() -> dict:
+    """Gets all clowns: their id, name, speciality"""
+    with conn.cursor() as cur:
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, speciality_name
+                        FROM clown AS c
+                        JOIN speciality USING(speciality_id)
+                        LEFT JOIN review AS r USING(clown_id)
+                        WHERE c.clown_id NOT IN(SELECT clown_id FROM review);""")
+        clown = cur.fetchall()
+        return clown
+
+
+def get_clowns_with_score(sort_order) -> dict:
+    """Gets all clowns: their id, name, speciality, average rating and number of ratings"""
+    with conn.cursor() as cur:
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, AVG(r.rating) as Average_rating, COUNT(r.rating)
+                        FROM clown as c
+                        JOIN speciality as s USING(speciality_id)
+                        LEFT JOIN review as r USING(clown_id)
+                        GROUP BY c.clown_id, c.clown_name, s.speciality_name
+                        HAVING COUNT(r.rating) > 0
+                        ORDER BY AVG(r.rating) {sort_order.upper()};""")
+        clowns = cur.fetchall()
+        return clowns
 
 
 @app.route("/clown/<int:clown_id>/review", methods=["POST"])
@@ -95,9 +152,7 @@ def add_review_to_clown(clown_id: int) -> Response:
         Where the score is a number between 1 to 5"""
     review = request.json
     score = review["score"]
-    print(score)
     if validate_score(score):
-        print("here")
         with conn.cursor() as cur:
             query = f"INSERT INTO review (clown_id, rating) VALUES\
             ({clown_id},{score}) RETURNING review_id"
@@ -111,7 +166,7 @@ def add_review_to_clown(clown_id: int) -> Response:
 
 def validate_score(score: int) -> bool:
     """ Validates score to be an integer between 1 and 5"""
-    if isinstance(score, int) and 0 < score < 5:
+    if isinstance(score, int) and 0 < score < 6:
         return True
     return False
 
@@ -120,8 +175,14 @@ def validate_sort_order(sort_order: str) -> bool:
     """ Validates sort order is ascending or descending"""
     if sort_order and sort_order not in ["asc", "desc"]:
         return False
-
     return True
+
+
+def get_sort_order(sort_order):
+    """ Default sort order given as desc """
+    if not sort_order:
+        sort_order = 'DESC'
+    return sort_order.upper()
 
 
 if __name__ == "__main__":
