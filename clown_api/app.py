@@ -33,14 +33,14 @@ def get_clowns() -> Response:
         order = get_sort_order(sort_order)
 
         if order == 'DESC':
-            """If descending, must call 0 scores first to maintain descending order"""
-            clowns = get_clowns_no_scores()
-            clowns += get_clowns_with_score(order)
+            # If descending, must call 0 scores first to maintain descending order
+            clowns = get_clowns_with_score(order)
+            clowns += get_clowns_no_scores()
         else:
             clowns = get_clowns_no_scores()
             clowns += get_clowns_with_score(order)
         return clowns
-    else:
+    if request.method == "POST":
         data = request.json
         try:
             if "clown_name" not in data or "speciality_id" not in data:
@@ -67,9 +67,11 @@ def get_clowns() -> Response:
 
 def get_all_clowns(sort_order: str) -> Response:
     """ Retrieves clowns: id, name, speciality, average rating.
-        Orders if given, otherwise default is descending order. """
+        Orders if given, otherwise default is descending order. 
+        Task 4 """
     with conn.cursor() as cur:
-        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, AVG(r.rating) as Average_rating
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, \
+                    AVG(r.rating) as Average_rating
                         FROM clown as c
                         JOIN speciality as s USING(speciality_id)
                         LEFT JOIN review as r USING(clown_id)
@@ -82,14 +84,12 @@ def get_all_clowns(sort_order: str) -> Response:
 @app.route("/clown/<int:clown_id>", methods=["GET"])
 def get_clowns_with_id(clown_id: int) -> Response:
     """Returns a clown by its ID in response to a GET request;"""
-    if request.method == "GET":
-        with conn.cursor() as cur:
-            clown = get_clown_with_score(clown_id)
-            clown += get_clown_no_scores(clown_id)
+    clown = get_clown_with_score(clown_id)
+    clown += get_clown_no_scores(clown_id)
 
-            if clown:
-                return jsonify(clown), 200
-            return {'error': "No clown was found for this id"}, 404
+    if clown:
+        return jsonify(clown), 200
+    return {'error': "No clown was found for this id"}, 404
 
 
 def get_clown_no_scores(clown_id: int) -> dict:
@@ -99,7 +99,8 @@ def get_clown_no_scores(clown_id: int) -> dict:
                         FROM clown AS c
                         JOIN speciality USING(speciality_id)
                         LEFT JOIN review AS r USING(clown_id)
-                        WHERE c.clown_id = {clown_id} AND {clown_id} NOT IN(SELECT clown_id FROM review);""")
+                        WHERE c.clown_id = {clown_id} AND {clown_id} \
+                            NOT IN(SELECT clown_id FROM review);""")
         clown = cur.fetchall()
         return clown
 
@@ -107,7 +108,8 @@ def get_clown_no_scores(clown_id: int) -> dict:
 def get_clown_with_score(clown_id: int) -> dict:
     """Gets a clown by its id: their id, name, speciality, average rating and number of ratings"""
     with conn.cursor() as cur:
-        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, AVG(r.rating) as Average_rating, COUNT(r.rating)
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, \
+                    AVG(r.rating) as Average_rating, COUNT(r.rating)
                         FROM clown as c
                         JOIN speciality as s USING(speciality_id)
                         LEFT JOIN review as r USING(clown_id)
@@ -133,7 +135,8 @@ def get_clowns_no_scores() -> dict:
 def get_clowns_with_score(sort_order) -> dict:
     """Gets all clowns: their id, name, speciality, average rating and number of ratings"""
     with conn.cursor() as cur:
-        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name, AVG(r.rating) as Average_rating, COUNT(r.rating)
+        cur.execute(f"""SELECT c.clown_id, c.clown_name, s.speciality_name,\
+                     AVG(r.rating) as Average_rating, COUNT(r.rating)
                         FROM clown as c
                         JOIN speciality as s USING(speciality_id)
                         LEFT JOIN review as r USING(clown_id)
