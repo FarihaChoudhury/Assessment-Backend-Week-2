@@ -153,6 +153,9 @@ def add_review_to_clown(clown_id: int) -> Response:
         Only accepts post requests of form: {score: 1}
         Where the score is a number between 1 to 5"""
     review = request.json
+    if 'score' not in review.keys():
+        return {"error": "Invalid review key, required score"}, 404
+
     score = review["score"]
 
     if validate_score(score):

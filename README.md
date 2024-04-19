@@ -37,7 +37,8 @@ The clown API is JSON-based; **all responses should be in JSON format** only.
 | `/`      | `GET`  | Returns a welcome message                  |
 | `/clown` | `GET`  | Returns a list of clowns and their details |
 | `/clown` | `POST` | Creates a new clown in the database        |
-
+| `/clown/id` | `GET` | Returns a clown and their details        |
+| `/clown/id/review` | `POST` | Creates a new review for a clown in the database       |
 ## Tasks
 
 Tasks can be found in [here](./tasks.md)
