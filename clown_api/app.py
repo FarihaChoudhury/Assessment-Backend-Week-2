@@ -39,7 +39,6 @@ def get_clowns() -> Response:
         else:
             clowns = get_clowns_no_scores()
             clowns += get_clowns_with_score(order)
-
         return clowns
     else:
         data = request.json
@@ -152,15 +151,17 @@ def add_review_to_clown(clown_id: int) -> Response:
         Where the score is a number between 1 to 5"""
     review = request.json
     score = review["score"]
+
     if validate_score(score):
         with conn.cursor() as cur:
             query = f"INSERT INTO review (clown_id, rating) VALUES\
-            ({clown_id},{score}) RETURNING review_id"
+            ({clown_id},{score}) RETURNING review"
             cur.execute(query)
-            review = cur.fetchall()
+            review = cur.fetchone()
             conn.commit()
             if review:
-                return jsonify(review), 200
+                print(review)
+                return jsonify(review), 201
     return {"error": "Invalid review"}, 404
 
 
